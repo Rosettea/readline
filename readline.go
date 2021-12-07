@@ -60,8 +60,6 @@ import "C"
 
 import (
 	"io"
-	"os"
-	"os/signal"
 	"regexp"
 	"syscall"
 	"unsafe"
@@ -104,6 +102,8 @@ var csiParam = "([0-9]+|\"[^\"]*\")"
 var csiSuffix = "[@-~]"
 var csiRegex = csiPrefix + "(" + csiParam + "(;" + csiParam + ")*)?" + csiSuffix
 var escapeSeq = regexp.MustCompile(shortEscRegex + "|" + csiRegex)
+
+var initialized = false
 
 // Begin reading lines. If more than one line is required, the continue prompt
 // is used for subsequent lines.
@@ -294,22 +294,20 @@ func Cleanup() {
 	C.rl_cleanup_after_signal()
 }
 
-func handleSignals() {
-	signals := make(chan os.Signal, 1)
-	signal.Notify(signals, syscall.SIGWINCH)
-
-	for s := range signals {
-		switch s {
-		case syscall.SIGWINCH:
-			C.rl_resize_terminal()
-		}
+func Resize() {
+	if initialized {
+		C.rl_resize_terminal()
 	}
 }
 
-func init() {
+func Init() {
 	C.rl_catch_signals = 0
 	C.rl_catch_sigwinch = 0
-	C.register_readline()
+	C.rl_completer_quote_characters = C.CString("\"")
+	C.rl_filename_quote_characters = C.CString("\\ ")
+	C.rl_filename_completion_desired = 1
+	C.rl_filename_quoting_desired = 1
 
-	go handleSignals()
+	C.register_readline()
+	initialized = true
 }
